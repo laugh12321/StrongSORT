@@ -1,0 +1,19 @@
+STRONGSORT:
+  ECC: True
+  MC_LAMBDA: 0.995
+  EMA_ALPHA: 0.9
+  MAX_DIST: 0.3 # The matching threshold. Samples with larger distance are considered an invalid match
+  MAX_IOU_DISTANCE: 0.5 # Gating threshold. Associations with cost larger than this value are disregarded.
+  MAX_AGE: 70 # Maximum number of missed misses before a track is deleted
+  N_INIT: 3 # Number of frames that a track remains in initialization phase
+  NN_BUDGET: 100 # Maximum size of the appearance descriptors gallery
+  
+# ReID
+REID:
+  NAME: 'resnet34_ibn_a'
+  LAST_STRIDE: 1
+  PRETRAIN: False
+  PRETRAIN_PATH: 'E:/MySpace/resource/hub/weights/resnet_34_ibn.pth'
+  NECK: 'bnneck'
+  NECK_FEAT: 'after'
+  NUM_CLASS: 751  # classes
