@@ -8,7 +8,6 @@
 '''
 import numpy as np
 import torch
-from haversine import haversine
 
 from .configs.parser import get_config
 from .deep.extractor import Extractor
@@ -36,8 +35,6 @@ def build_tracker(cfg_pth='./configs/config.yaml', use_cuda=True):
         mc_lambda=cfg.STRONGSORT.MC_LAMBDA,
         ema_alpha=cfg.STRONGSORT.EMA_ALPHA,
         use_cuda=use_cuda,
-        update_rate=cfg.VELO.UPDATE_RATE,
-        p_matrix=cfg.VELO.P_MATRIX
     )
 
 
@@ -46,7 +43,6 @@ class StrongSORT(object):
     def __init__(
         self,
         pretrain_path,
-        p_matrix,  # 投影矩阵
         use_cuda=True,
         num_classes=751,
         last_stride=1,
@@ -60,8 +56,7 @@ class StrongSORT(object):
         n_init=3,
         nn_budget=100,
         mc_lambda=0.995,
-        ema_alpha=0.9,
-        update_rate=4,  # 更新频率
+        ema_alpha=0.9
     ):
 
         self.extractor = Extractor(
@@ -83,14 +78,8 @@ class StrongSORT(object):
             ema_alpha=ema_alpha,
             mc_lambda=mc_lambda
         )  # 初始化轨迹
-        self.update_rate = update_rate  # 更新频率
-        self.p_matrix = p_matrix  # 单应性矩阵
-        self.ema_alpha = ema_alpha
-        self.frame_count = 0  # 帧数
-        self.tracks_active = {}  # 轨迹日志
 
-    def update(self, bbox_xyxy, confidences, classes, ori_img, frame_rate):
-        self.frame_count += 1
+    def update(self, bbox_xyxy, confidences, classes, ori_img):
         self.height, self.width = ori_img.shape[:2]
         # generate detections
         features = self._get_features(bbox_xyxy, ori_img)
@@ -118,41 +107,10 @@ class StrongSORT(object):
 
             track_id = track.track_id
             class_id = track.class_id
-            newestRealLoc = self.homography2Dto3D(self.getLocation(bbox_xyxy), self.p_matrix)
-
-            if track_id in self.tracks_active:
-                self.tracks_active[track_id]["frame"] = self.frame_count
-                self.tracks_active[track_id]["track_id"] = track_id
-                self.tracks_active[track_id]["class_id"] = class_id
-                self.tracks_active[track_id]["bbox"] = bbox_xyxy
-                self.tracks_active[track_id]["newestRealLoc"] = newestRealLoc
-            else:
-                self.tracks_active[track_id] = {
-                    "track_id": track_id,
-                    "class_id": class_id,
-                    "bbox": bbox_xyxy,
-                    "newestRealLoc": newestRealLoc,
-                    "prevRealLoc": newestRealLoc,
-                    "frame": self.frame_count,
-                    "prevFrame": self.frame_count,
-                }
-            if self.frame_count % self.update_rate == 0 and self.tracks_active[track_id][
-                "frame"] != self.tracks_active[track_id]["prevFrame"]:
-                frame_count = self.tracks_active[track_id]["frame"] - self.tracks_active[track_id][
-                    "prevFrame"]
-                componentDist = haversine(
-                    self.tracks_active[track_id]['newestRealLoc'],
-                    self.tracks_active[track_id]['prevRealLoc']
-                )
-                speed = (componentDist / (frame_count / frame_rate)) * 3600
-                self.tracks_active[track_id]["speed"] = 0 if speed < 7 else speed
-                self.tracks_active[track_id]['prevRealLoc'] = self.tracks_active[track_id][
-                    'newestRealLoc']
-                self.tracks_active[track_id]['EMAspeed'] = self.emaVelocity(
-                    self.tracks_active[track_id]
-                )
-                self.tracks_active[track_id]['prevFrame'] = self.tracks_active[track_id]['frame']
-            outputs.append(self.tracks_active[track_id])
+            conf = track.conf
+            outputs.append([bbox_xyxy, class_id, track_id, conf])
+        # if outputs:
+        #     outputs = np.stack(outputs, axis=0)
         return outputs
 
     """
@@ -181,47 +139,6 @@ class StrongSORT(object):
         bbox_tlwh[:, 2] = bbox_xyxy[:, 2] - bbox_xyxy[:, 0]  # width
         bbox_tlwh[:, 3] = bbox_xyxy[:, 3] - bbox_xyxy[:, 1]  # height
         return bbox_tlwh
-
-    @staticmethod
-    def getLocation(bbox: list):
-        """_summary_
-
-        Args:
-            bbox (list): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        return (bbox[2] + bbox[0]) / 2, (bbox[3] + bbox[1]) / 2
-
-    @staticmethod
-    def homography2Dto3D(o2dpt, homoMat):
-        """_summary_
-
-        Args:
-            o2dpt (_type_): _description_
-            homoMat (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        homogen2dPt = [*o2dpt, 1]
-        matInv = np.linalg.inv(homoMat)
-        hh = np.dot(matInv, homogen2dPt)
-        scalar = hh[2]
-        return [hh[0] / scalar, hh[1] / scalar]
-
-    def emaVelocity(self, track):
-        """_summary_
-
-        Args:
-            track (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        return self.ema_alpha * track['speed'] + (1 - self.ema_alpha) * track[
-            'EMAspeed'] if "EMAspeed" in track else track['speed']
 
     def _xywh_to_xyxy(self, bbox_xywh):
         x, y, w, h = bbox_xywh

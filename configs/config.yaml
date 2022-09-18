@@ -1,7 +1,7 @@
 STRONGSORT:
   ECC: True
   MC_LAMBDA: 0.995
-  EMA_ALPHA: 0.5
+  EMA_ALPHA: 0.9
   MAX_DIST: 0.3 # The matching threshold. Samples with larger distance are considered an invalid match
   MAX_IOU_DISTANCE: 0.5 # Gating threshold. Associations with cost larger than this value are disregarded.
   MAX_AGE: 70 # Maximum number of missed misses before a track is deleted
@@ -13,13 +13,7 @@ REID:
   NAME: 'resnet34_ibn_a'
   LAST_STRIDE: 1
   PRETRAIN: False
-  PRETRAIN_PATH: 'E:\Laugh\Project\roadside-terminal\core\strongsort\weights\resnet_34_ibn.pth'
+  PRETRAIN_PATH: 'E:/MySpace/resource/hub/weights/resnet_34_ibn.pth'
   NECK: 'bnneck'
   NECK_FEAT: 'after'
   NUM_CLASS: 751  # classes
-
-VELO:
-  UPDATE_RATE: 25
-  P_MATRIX: [[-2.6149179e+01, -1.8454611e+01, -1.0132174e+03],
-            [-4.3438969e+00,  3.9698789e-03,  2.0716510e+02],
-            [-1.7229080e-02,  1.4735173e-03,  1.0000000e+00]]
